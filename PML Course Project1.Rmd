@@ -1,0 +1,129 @@
+---
+title: "PML - Course Project"
+author: "Tom Snir"
+date: "August 28, 2016"
+output: html_document
+---
+
+##Background
+
+Wearable electronic devices collected a large amount of data about the personal acitivy of six individuals. This data will be used to analyze and model how well a specific exercise, the barbell curl, was performed by these individuals. This data will also be used to classify how 20 additional individuals performed the same exercise.
+
+The variable we aim to predict is **classe**, which can have one of five possible values:
+
+Class A - exactly according to the specification  
+Class B - throwing the elbows to the front  
+Class C - lifting the dumbbell only halfway  
+Class D - lowering the dumbbell only halfway  
+Class E - throwing the hips to the front  
+
+
+##Data Exploration
+
+Before data analysis can begin, we must load the relevant R libraries. For the sake of reproducibility, a random seed is also set.
+
+```{r, warning=FALSE, error=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+set.seed(2345)
+```
+
+next we download and read the raw data sets. Some feature selection is also performed in order to remove missing values, empty columns and the first seven columns that contain information not relevant to the classification, in order to avoid bias. Finally, we take a look at our two data sets (only code is shown).
+
+```{r}
+train_url <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training_raw <- read.csv(url(train_url), na.strings=c("NA","#DIV/0!",""))
+testing_raw <- read.csv(url(test_url), na.strings=c("NA","#DIV/0!",""))
+
+training_set <-training_raw[,colSums(is.na(training_raw)) == 0]
+testing_set <-testing_raw[,colSums(is.na(testing_raw)) == 0]
+
+training_set   <-training_set[,-c(1:7)]
+testing_set <-testing_set[,-c(1:7)]
+
+
+```
+
+```{r, results="hide"}
+dim(training_set)
+dim(testing_set)
+head(training_set)
+head(testing_set)
+
+```
+
+We are left with 53 variables and 19,622 values in the training set, and the same 53 variables and 20 values for the test set. These are the 20 casses for which we will attempt to predict the classe variable later on.  
+
+##Cross validation
+
+The training set is now partitioned into 2 sets in order to allow training and testing of our model.
+
+```{r}
+partition_set <- createDataPartition(y=training_set$classe, p=0.66, list=FALSE)
+part_training <- training_set[partition_set, ] 
+part_testing <- training_set[-partition_set, ]
+
+```
+
+##Prediction
+
+###1st model - Decision Tree
+
+Using the partitioned data and training sets, we run a decision tree model:
+
+```{r}
+model1 <- rpart(classe ~ ., data=part_training, method="class")
+prediction1 <- predict(model1, part_testing, type = "class")
+rpart.plot(model1, main="Classification Tree", extra=102, under=TRUE, faclen=0)
+```
+
+And to see how well this model performs:
+
+```{r}
+confusionMatrix(prediction1, part_testing$classe)
+```
+
+###2nd model - Random Forest
+
+Running the second model using the partitioned data and training sets:
+
+```{r}
+model2 <- randomForest(classe ~. , data=part_training, method="class")
+prediction2 <- predict(model2, part_testing, type = "class")
+```
+
+Evaluating the second model:
+
+```{r}
+confusionMatrix(prediction2, part_testing$classe)
+```
+
+##Conclusions regarding the modeling
+
+Comparing these two models it is clear that the superior one is Random Forest, showing better sensitiviy and specificity for all 5 classes. Furthermore, the model itself is a good one, with accuracy of 99.5% and a P-value of 2e-16. 
+
+##Prediction
+
+The final step is of course to use the model we created to predit the 20 cases in the original testing set. We will be using our 2nd model, the Random Forest. The result of our pediction will be written to a text file for submission according to the instructions given in the assignment.
+
+```{r}
+
+prediction <- predict(model2, testing_set, type="class")
+prediction
+
+PML_submission = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+PML_submission(prediction)
+
+```
+
